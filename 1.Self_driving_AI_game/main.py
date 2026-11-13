@@ -9,9 +9,9 @@ import pygame
 WIDTH = 1600
 HEIGHT = 880
 
-# Car size (fits comfortably inside the 120px-wide road)
-CAR_SIZE_X = 36
-CAR_SIZE_Y = 20
+# Car size (fits inside the road)
+CAR_SIZE_X = 35
+CAR_SIZE_Y = 18
 
 # Border color (pure white outside the track = crash)
 BORDER_COLOR = (255, 255, 255, 255)
@@ -36,15 +36,15 @@ class Car:
         # Load and scale car sprite
         self.sprite = pygame.image.load('car.png').convert_alpha()
         self.sprite = pygame.transform.scale(self.sprite, (CAR_SIZE_X, CAR_SIZE_Y))
-        self.rotated_sprite = self.sprite
 
-        # Spawn directly on the starting grid on the top straight
-        self.position = [820.0, 140.0]
+        # Safe center position on the asphalt road on the top straight
+        self.center = [600.0, 85.0]
         self.angle = 180.0  # Facing left along the long straight runway
         self.speed = 8.0
-        self.speed_set = True
 
-        self.center = [self.position[0] + CAR_SIZE_X / 2.0, self.position[1] + CAR_SIZE_Y / 2.0]
+        # Rotate sprite and get centered rectangle (no subsurface bug!)
+        self.rotated_sprite = pygame.transform.rotate(self.sprite, self.angle)
+        self.rect = self.rotated_sprite.get_rect(center=(int(self.center[0]), int(self.center[1])))
 
         self.radars = []
         self.alive = True
@@ -52,14 +52,14 @@ class Car:
         self.time = 0
 
     def draw(self, screen_surf):
-        screen_surf.blit(self.rotated_sprite, (int(self.position[0]), int(self.position[1])))
+        screen_surf.blit(self.rotated_sprite, self.rect.topleft)
         self.draw_radar(screen_surf)
 
     def draw_radar(self, screen_surf):
         for radar in self.radars:
             pos = radar[0]
-            pygame.draw.line(screen_surf, (34, 197, 94), (int(self.center[0]), int(self.center[1])), pos, 1)
-            pygame.draw.circle(screen_surf, (34, 197, 94), pos, 3)
+            pygame.draw.line(screen_surf, (0, 255, 0), (int(self.center[0]), int(self.center[1])), pos, 1)
+            pygame.draw.circle(screen_surf, (0, 255, 0), pos, 3)
 
     def check_collision(self, map_surf):
         self.alive = True
@@ -84,7 +84,7 @@ class Car:
         x = int(self.center[0] + cos_val * length)
         y = int(self.center[1] + sin_val * length)
 
-        while length < 300:
+        while length < 250:
             if 0 <= x < WIDTH and 0 <= y < HEIGHT:
                 pixel_color = map_surf.get_at((x, y))
                 if pixel_color[:3] == (255, 255, 255):
@@ -99,16 +99,17 @@ class Car:
         self.radars.append([(x, y), dist])
 
     def update(self, map_surf):
-        self.rotated_sprite = self.rotate_center(self.sprite, self.angle)
-
+        # Update linear displacement
         rad = math.radians(360.0 - self.angle)
-        self.position[0] += math.cos(rad) * self.speed
-        self.position[1] += math.sin(rad) * self.speed
+        self.center[0] += math.cos(rad) * self.speed
+        self.center[1] += math.sin(rad) * self.speed
 
         self.distance += self.speed
         self.time += 1
 
-        self.center = [self.position[0] + CAR_SIZE_X / 2.0, self.position[1] + CAR_SIZE_Y / 2.0]
+        # Affine centered rotation without subsurface bounding box overflow
+        self.rotated_sprite = pygame.transform.rotate(self.sprite, self.angle)
+        self.rect = self.rotated_sprite.get_rect(center=(int(self.center[0]), int(self.center[1])))
 
         # Calculate exact 4 corners of car
         half_w = CAR_SIZE_X / 2.0
@@ -136,7 +137,7 @@ class Car:
         return_values = [0, 0, 0, 0, 0]
         for i, radar in enumerate(self.radars):
             if i < 5:
-                return_values[i] = int(radar[1] / 30.0)
+                return_values[i] = int(radar[1] / 25.0)
         return return_values
 
     def is_alive(self):
@@ -144,13 +145,6 @@ class Car:
 
     def get_reward(self):
         return self.distance / (CAR_SIZE_X / 2.0)
-
-    def rotate_center(self, image, angle):
-        rectangle = image.get_rect()
-        rotated_image = pygame.transform.rotate(image, angle)
-        rotated_rectangle = rectangle.copy()
-        rotated_rectangle.center = rotated_image.get_rect().center
-        return rotated_image.subsurface(rotated_rectangle).copy()
 
 
 def run_simulation(genomes, config):
@@ -180,14 +174,14 @@ def run_simulation(genomes, config):
                 output = nets[i].activate(car.get_data())
                 choice = output.index(max(output))
                 if choice == 0:
-                    car.angle += 7.0   # Steer Left
+                    car.angle += 8.0   # Steer Left
                 elif choice == 1:
-                    car.angle -= 7.0   # Steer Right
+                    car.angle -= 8.0   # Steer Right
                 elif choice == 2:
-                    if car.speed - 1.0 >= 5.0:
+                    if car.speed - 1.0 >= 4.0:
                         car.speed -= 1.0  # Brake
                 else:
-                    if car.speed + 1.0 <= 14.0:
+                    if car.speed + 1.0 <= 12.0:
                         car.speed += 1.0  # Accelerate
 
         # Update physics & record fitness
@@ -214,14 +208,14 @@ def run_simulation(genomes, config):
                 car.draw(screen)
 
         # Draw HUD stats
-        gen_text = generation_font.render(f'Generation: {current_generation}', True, (15, 23, 42))
+        gen_text = generation_font.render(f'Generation: {current_generation}', True, (255, 255, 255))
         screen.blit(gen_text, (50, 40))
 
-        alive_text = alive_font.render(f'Still Alive: {still_alive}', True, (30, 41, 59))
+        alive_text = alive_font.render(f'Still Alive: {still_alive}', True, (0, 255, 0))
         screen.blit(alive_text, (50, 80))
 
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(0)
 
 
 if __name__ == '__main__':
