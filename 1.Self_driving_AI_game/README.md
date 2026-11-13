@@ -82,8 +82,7 @@ If any corner intersects the pure white boundary (`RGB: 255, 255, 255`), `self.a
 ├── car.png                                      # Top-down aerodynamic sports car sprite
 ├── map.png                                      # Widescreen racetrack surface with collision boundaries
 ├── make_track.py                                # Programmatic procedural track generator
-├── Self_Driving_Car_AI_Interview_Guide.pdf      # Foreign technical interview preparation guide
-└── Self_Driving_Car_Line_by_Line_Explanation.pdf # Line-by-line pedagogical code analysis
+
 ```
 
 ---
